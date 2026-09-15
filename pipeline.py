@@ -162,11 +162,27 @@ def main():
         months_since = month_diff(last_ep[1], last) if last_ep else None
         start_current = None
 
-    # Intervalos (em meses) entre o fim de um episodio e o inicio do seguinte.
-    gaps = [month_diff(eps[i][1], eps[i + 1][0]) for i in range(len(eps) - 1)]
-    record_gap = bool(
-        not in_recession and months_since is not None and gaps and months_since > max(gaps)
-    )
+    # Intervalos (em meses) sem acionamento: entre o fim de um episodio e o inicio
+    # do seguinte, mais o intervalo aberto que vai do ultimo episodio ate hoje.
+    gaps = [
+        {
+            "meses": month_diff(eps[i][1], eps[i + 1][0]),
+            "de": str(eps[i][1]),
+            "ate": str(eps[i + 1][0]),
+            "em_curso": False,
+        }
+        for i in range(len(eps) - 1)
+    ]
+    if not in_recession and last_ep is not None:
+        gaps.append(
+            {
+                "meses": months_since,
+                "de": str(last_ep[1]),
+                "ate": str(last),
+                "em_curso": True,
+            }
+        )
+    recorde = max(gaps, key=lambda g: g["meses"]) if gaps else None
 
     codace_flag = pd.Series(False, index=df.index)
     for a, b in CODACE:
@@ -191,8 +207,10 @@ def main():
             "inicio_recessao_corrente": start_current,
             "fim_ultima_recessao": str(last_ep[1]) if last_ep else None,
             "meses_acionados": int(df["trig"].sum()),
-            "intervalo_recorde": record_gap,
-            "maior_intervalo_anterior": max(gaps) if gaps else None,
+            "recorde_meses_sem_recessao": recorde["meses"] if recorde else None,
+            "recorde_em_curso": bool(recorde["em_curso"]) if recorde else False,
+            "recorde_de": recorde["de"] if recorde else None,
+            "recorde_ate": recorde["ate"] if recorde else None,
         },
         "series": {
             "datas": [str(p) for p in df.index],
