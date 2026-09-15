@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Indicador Made: regra de Sahm calibrada para o Brasil (limiar de 0,3 p.p.), atualizada a cada divulgacao da PNAD Continua do IBGE.">
+<meta property="og:title" content="Indicador Made">
+<meta property="og:description" content="Regra de Sahm calibrada para o Brasil. Alerta rapido de recessoes a partir da taxa de desocupacao.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 32 32&quot;%3E%3Crect width=&quot;32&quot; height=&quot;32&quot; rx=&quot;5&quot; fill=&quot;%2315556E&quot;/%3E%3Cpath d=&quot;M4 23 L10 20 L14 11 L19 25 L23 15 L28 18&quot; fill=&quot;none&quot; stroke=&quot;%23FBFCFA&quot; stroke-width=&quot;2.4&quot; stroke-linejoin=&quot;round&quot; stroke-linecap=&quot;round&quot;/%3E%3C/svg%3E">
+<title>Indicador Made</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root{
+    --ground:#E9EBE6;
+    --surface:#FBFCFA;
+    --surface-2:#F2F4EF;
+    --ink:#131E24;
+    --ink-2:#3A4A50;
+    --muted:#66757A;
+    --line:#CDD3CB;
+    --accent:#15556E;
+    --accent-soft:rgba(21,85,110,.14);
+    --alert:#A5301C;
+    --alert-soft:rgba(165,48,28,.16);
+    --calm:#2C6146;
+    --band:rgba(19,30,36,.075);
+    --shadow:0 1px 0 rgba(19,30,36,.05), 0 12px 28px -22px rgba(19,30,36,.55);
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --sans:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#0E1417;
+      --surface:#151D21;
+      --surface-2:#1B252A;
+      --ink:#E5EAE5;
+      --ink-2:#B7C3C4;
+      --muted:#8A999E;
+      --line:#2A373C;
+      --accent:#6DB4D0;
+      --accent-soft:rgba(109,180,208,.16);
+      --alert:#E58165;
+      --alert-soft:rgba(229,129,101,.18);
+      --calm:#7CBF9C;
+      --band:rgba(229,234,229,.07);
+      --shadow:0 1px 0 rgba(0,0,0,.35), 0 16px 34px -24px #000;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0E1417;
+    --surface:#151D21;
+    --surface-2:#1B252A;
+    --ink:#E5EAE5;
+    --ink-2:#B7C3C4;
+    --muted:#8A999E;
+    --line:#2A373C;
+    --accent:#6DB4D0;
+    --accent-soft:rgba(109,180,208,.16);
+    --alert:#E58165;
+    --alert-soft:rgba(229,129,101,.18);
+    --calm:#7CBF9C;
+    --band:rgba(229,234,229,.07);
+    --shadow:0 1px 0 rgba(0,0,0,.35), 0 16px 34px -24px #000;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:16.5px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:1080px;
+    margin:0 auto;
+    padding-inline:20px;
+    padding-block:38px 56px;
+    display:flex;
+    flex-direction:column;
+    gap:26px;
+  }
+
+  /* ---------- header ---------- */
+  header{display:flex;flex-direction:column;gap:10px}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--muted);
+    display:flex;flex-wrap:wrap;gap:6px 12px;
+  }
+  h1{
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:clamp(34px,6.4vw,54px);
+    line-height:1.02;
+    letter-spacing:-.028em;
+    margin:0;
+    text-wrap:balance;
+  }
+  .standfirst{
+    margin:0;
+    max-width:62ch;
+    color:var(--ink-2);
+    font-size:17px;
+  }
+  .rule{height:1px;background:var(--line);border:0;margin:0}
+
+  /* ---------- status ---------- */
+  .status{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:var(--shadow);
+    display:grid;
+    grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
+    gap:0;
+    overflow:hidden;
+  }
+  .status-main{padding:26px 28px;display:flex;flex-direction:column;gap:16px}
+  .chip{
+    align-self:flex-start;
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:var(--mono);font-size:11.5px;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;
+    padding:5px 11px 5px 9px;border-radius:2px;
+    border:1px solid currentColor;
+  }
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+  .chip.on{color:var(--alert)}
+  .chip.off{color:var(--calm)}
+  .verdict{
+    font-family:var(--sans);font-weight:600;
+    font-size:clamp(23px,3.6vw,30px);line-height:1.14;
+    letter-spacing:-.018em;margin:0;text-wrap:balance;
+  }
+  .verdict-note{margin:0;color:var(--ink-2);font-size:15.5px;max-width:46ch}
+
+  /* linear gauge */
+  .gauge{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+  .gauge-track{
+    position:relative;height:26px;border-radius:2px;
+    background:linear-gradient(90deg,var(--surface-2),var(--surface-2));
+    border:1px solid var(--line);
+  }
+  .gauge-fill{position:absolute;top:0;bottom:0;left:0;background:var(--accent-soft)}
+  .gauge-thr{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--alert)}
+  .gauge-now{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
+  .gauge-scale{
+    position:relative;height:15px;
+    font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em;
+  }
+  .gauge-scale span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+  .gauge-scale span.edge-l{transform:none;left:0}
+  .gauge-scale span.edge-r{transform:none;right:0;left:auto}
+  .gauge-scale span.thr{color:var(--alert);font-weight:600}
+
+  .status-side{
+    border-left:1px solid var(--line);
+    background:var(--surface-2);
+    display:flex;flex-direction:column;
+  }
+  .readout{
+    padding:15px 24px;
+    display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+    border-bottom:1px solid var(--line);
+  }
+  .readout:last-child{border-bottom:0}
+  .readout dt{
+    font-family:var(--sans);font-size:12.5px;font-weight:500;
+    letter-spacing:.02em;color:var(--muted);margin:0;max-width:22ch;line-height:1.3;
+  }
+  .readout dd{
+    margin:0;font-family:var(--mono);font-weight:500;
+    font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .readout dd small{font-size:12px;font-weight:400;color:var(--muted);margin-left:3px}
+
+  /* ---------- chart ---------- */
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:var(--shadow);
+    padding:24px 22px 18px;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  .panel-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 18px}
+  h2{
+    font-family:var(--sans);font-weight:600;font-size:19px;
+    letter-spacing:-.012em;margin:0;
+  }
+  .panel-head p{margin:0;color:var(--muted);font-size:14px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13.5px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:8px}
+  .key{width:18px;height:3px;flex:none;border-radius:2px}
+  .key.line{background:var(--accent)}
+  .key.thr{background:transparent;border-top:2px dashed var(--alert);height:0}
+  .key.band{height:12px;background:var(--band);border:1px solid var(--line);border-radius:1px;width:18px}
+  .chart-holder{position:relative;width:100%}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .ax-text{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+  .thr-label{font-family:var(--mono);font-size:11px;font-weight:600;fill:var(--alert)}
+  .tip{
+    position:absolute;pointer-events:none;opacity:0;transition:opacity .12s ease;
+    background:var(--surface);border:1px solid var(--line);border-radius:2px;
+    box-shadow:var(--shadow);padding:9px 12px;min-width:172px;
+    font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--ink);
+    font-variant-numeric:tabular-nums;z-index:5;
+  }
+  .tip b{font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:10.5px;color:var(--muted);display:block;margin-bottom:3px}
+  .tip .row{display:flex;justify-content:space-between;gap:16px}
+  .tip .state{margin-top:4px;font-weight:600}
+  .tip .state.on{color:var(--alert)}
+  .tip .state.off{color:var(--calm)}
+
+  /* ---------- notes ---------- */
+  .notes{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));
+    gap:22px 34px;
+  }
+  .notes h3{
+    font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 7px;
+  }
+  .notes p{margin:0 0 9px;font-size:14.8px;color:var(--ink-2)}
+  .notes p:last-child{margin-bottom:0}
+  .notes a{color:var(--accent);text-underline-offset:2px}
+  footer{
+    font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    display:flex;flex-wrap:wrap;gap:6px 18px;letter-spacing:.03em;
+  }
+  footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  footer a:hover,footer a:focus-visible{border-bottom-color:currentColor}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:1px}
+
+  @media (max-width:760px){
+    .status{grid-template-columns:1fr}
+    .status-side{border-left:0;border-top:1px solid var(--line)}
+    .status-main{padding:22px 20px}
+    .readout{padding:13px 20px}
+    .panel{padding:20px 15px 14px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">
+      <span>Made/USP</span><span>·</span>
+      <span>Nota de Política Econômica nº 87</span><span>·</span>
+      <span>Klein &amp; Paulino</span>
+    </div>
+    <h1>Indicador Made</h1>
+    <p class="standfirst">
+      Uma regra de Sahm calibrada para o Brasil: sinaliza o início de uma recessão quando a média
+      móvel de três meses da taxa de desocupação dessazonalizada supera em 0,3 ponto percentual o
+      menor valor dessa média nos doze meses anteriores.
+    </p>
+  </header>
+
+  <hr class="rule">
+
+  <section class="status" aria-labelledby="verdict">
+    <div class="status-main">
+      <span class="chip off" id="chip"><span class="dot"></span><span id="chip-text">sem sinal</span></span>
+      <p class="verdict" id="verdict">Carregando…</p>
+      <p class="verdict-note" id="verdict-note"></p>
+      <div class="gauge">
+        <div class="gauge-track">
+          <div class="gauge-fill" id="g-fill"></div>
+          <div class="gauge-thr" id="g-thr"></div>
+          <div class="gauge-now" id="g-now"></div>
+        </div>
+        <div class="gauge-scale" id="g-scale"></div>
+      </div>
+    </div>
+    <dl class="status-side">
+      <div class="readout"><dt>Indicador no mês de referência</dt><dd id="r-ind">—<small>p.p.</small></dd></div>
+      <div class="readout"><dt>Taxa de desocupação dessazonalizada</dt><dd id="r-sa">—<small>%</small></dd></div>
+      <div class="readout"><dt>Meses desde a última recessão sinalizada</dt><dd id="r-months">—</dd></div>
+      <div class="readout"><dt>Meses com o indicador acionado desde 1980</dt><dd id="r-eps">—</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>O indicador, mês a mês</h2>
+      <p id="chart-range">1980 – hoje · pontos percentuais</p>
+    </div>
+    <div class="legend">
+      <span><i class="key line"></i>Indicador Made</span>
+      <span><i class="key thr"></i>Gatilho de 0,3 p.p.</span>
+      <span><i class="key band"></i>Recessões datadas pelo CODACE-FGV</span>
+    </div>
+    <div class="chart-holder" id="holder">
+      <svg id="chart" role="img" aria-labelledby="chart-title"><title id="chart-title">Indicador Made mês a mês desde 1980, com o gatilho de 0,3 ponto percentual e as recessões datadas pelo CODACE-FGV</title></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="notes">
+    <div>
+      <h3>Como a série é construída</h3>
+      <p>
+        A taxa mensal de desocupação combina três fontes: a PME na metodologia antiga (1980–2002),
+        a PME na metodologia nova (2002–2012) e a PNAD Contínua (trimestre móvel, 2012 em diante).
+        As séries são encadeadas retrospectivamente a partir do nível da PNADc e dessazonalizadas
+        com o X-13ARIMA-SEATS.
+      </p>
+      <p>
+        O ajuste sazonal é reestimado sobre a série inteira a cada divulgação do IBGE, de modo que
+        meses antigos podem sofrer revisões marginais e a contagem de episódios pode diferir
+        ligeiramente da Tabela 1 da nota original.
+      </p>
+    </div>
+    <div>
+      <h3>Por que 0,3 e não 0,5</h3>
+      <p>
+        O limiar de 0,5 p.p. de Claudia Sahm, calibrado para os Estados Unidos, sinaliza com atraso
+        vários episódios brasileiros. A elevada informalidade e a saída de trabalhadores da força de
+        trabalho amortecem a resposta do desemprego aberto à queda da atividade — um coeficiente de
+        Okun menor em valor absoluto. O melhor compromisso entre rapidez de detecção e falsos
+        positivos foi obtido em 0,3 p.p.
+      </p>
+    </div>
+    <div>
+      <h3>O que o indicador não é</h3>
+      <p>
+        Não é um indicador antecedente nem substitui a datação do CODACE: identifica a recessão
+        logo após seu início, como indicador coincidente de detecção precoce. Também sinaliza
+        episódios não datados como recessão pelos métodos tradicionais, como 2005–2006 e o início
+        de 2013.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Fonte: IBGE — PME e PNAD Contínua (SIDRA, tabela 6381)</span>
+    <span>Datação de ciclos: CODACE-FGV</span>
+    <span id="updated"></span>
+    <span><a href="indicador_made.csv" download>Baixar a série (CSV)</a></span>
+    <span><a href="https://madeusp.com.br/publicacoes/tipos/notas-de-politica-economica/">Nota de Política Econômica nº 87</a></span>
+    <span id="repo-link" hidden><a href="#">Código e dados</a></span>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  var D = window.MADE_DATA;
+  if(!D){ document.getElementById('verdict').textContent = 'Dados indisponíveis.'; return; }
+
+  var THR = D.meta.limiar;
+  var MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  var MESES_AB = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+  function num(v, d){ return v == null ? '—' : v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+  function pIdx(p){ var a = p.split('-'); return (+a[0]) * 12 + (+a[1]) - 1; }
+  function longo(p){ var a = p.split('-'); return MESES[+a[1]-1] + ' de ' + a[0]; }
+  function curto(p){ var a = p.split('-'); return MESES_AB[+a[1]-1] + '/' + a[0]; }
+
+  var S = D.series, st = D.status;
+  var n = S.datas.length;
+  var last = S.datas[n-1];
+
+  /* ---------------- status ---------------- */
+  var on = st.acionado;
+  var chip = document.getElementById('chip');
+  chip.className = 'chip ' + (on ? 'on' : 'off');
+  document.getElementById('chip-text').textContent = on ? 'recessão sinalizada' : 'sem sinal de recessão';
+
+  var minSa = Math.min.apply(null, S.sa);
+  var noMin = Math.abs(st.desemprego_sa - minSa) < 0.005;
+
+  document.getElementById('verdict').textContent = on
+    ? 'O indicador está acionado desde ' + longo(st.inicio_recessao_corrente) + '.'
+    : 'Nenhuma recessão em curso segundo o Indicador Made.';
+
+  document.getElementById('verdict-note').textContent = on
+    ? 'Dado de ' + longo(last) + ': a média móvel de três meses está ' + num(st.indicador,2) +
+      ' p.p. acima do seu mínimo dos doze meses anteriores.'
+    : 'Dado de ' + longo(last) + '. A última recessão sinalizada terminou em ' + longo(st.fim_ultima_recessao) +
+      ' — são ' + st.meses_desde_ultima_recessao + ' meses sem novo acionamento' +
+      (st.intervalo_recorde ? ', o intervalo mais longo desde 1980' : '') + '.' +
+      (noMin ? ' A taxa dessazonalizada está no menor nível da série.' : '');
+
+  /* gauge: escala de -0,3 a 0,9 p.p. */
+  var LO = -0.3, HI = 0.9;
+  var pos = function(v){ return Math.max(0, Math.min(100, (v - LO) / (HI - LO) * 100)); };
+  document.getElementById('g-fill').style.width = pos(st.indicador) + '%';
+  document.getElementById('g-thr').style.left = pos(THR) + '%';
+  document.getElementById('g-now').style.left = pos(st.indicador) + '%';
+  document.getElementById('g-now').style.background = on ? 'var(--alert)' : 'var(--accent)';
+  document.getElementById('g-fill').style.background = on ? 'var(--alert-soft)' : 'var(--accent-soft)';
+
+  document.getElementById('r-ind').innerHTML = num(st.indicador,2) + '<small>p.p.</small>';
+  document.getElementById('r-sa').innerHTML = num(st.desemprego_sa,1) + '<small>%</small>';
+  document.getElementById('r-months').textContent = st.meses_desde_ultima_recessao == null ? '0' : st.meses_desde_ultima_recessao;
+  document.getElementById('r-eps').textContent = st.meses_acionados;
+
+  /* escala do medidor, posicionada na mesma referência do marcador */
+  var scale = document.getElementById('g-scale');
+  [[-0.3,'−0,3','edge-l'],[0,'0,0',''],[THR,'0,3 · gatilho','thr'],[0.6,'0,6',''],[0.9,'0,9','edge-r']]
+    .forEach(function(s){
+      var sp = document.createElement('span');
+      sp.className = s[2]; sp.textContent = s[1];
+      if(s[2] !== 'edge-l' && s[2] !== 'edge-r') sp.style.left = pos(s[0]) + '%';
+      scale.appendChild(sp);
+    });
+  document.getElementById('chart-range').textContent = curto(S.datas[0]) + ' – ' + curto(last) + ' · pontos percentuais';
+  document.getElementById('updated').textContent = 'Atualizado em ' +
+    new Date(D.meta.atualizado_em).toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'});
+
+  /* O link do repositório é deduzido do próprio endereço no GitHub Pages,
+     de modo que continua correto se o projeto mudar de conta. */
+  (function(){
+    var m = location.hostname.match(/^([\w-]+)\.github\.io$/);
+    if(!m) return;
+    var seg = location.pathname.split('/').filter(Boolean)[0];
+    var el = document.getElementById('repo-link');
+    el.firstElementChild.href = 'https://github.com/' + m[1] + (seg ? '/' + seg : '.github.io');
+    el.hidden = false;
+  })();
+
+  /* ---------------- chart ---------------- */
+  var svg = document.getElementById('chart');
+  var NS = 'http://www.w3.org/2000/svg';
+  var W = 1000, H = 400;
+  var M = {t:14, r:16, b:30, l:34};
+  var iw = W - M.l - M.r, ih = H - M.t - M.b;
+
+  var t0 = pIdx(S.datas[0]), t1 = pIdx(last);
+  var vals = S.ind.filter(function(v){ return v != null; });
+  var yMax = Math.ceil(Math.max.apply(null, vals) * 2) / 2;
+  var yMin = Math.min(-1, Math.floor(Math.min.apply(null, vals) * 2) / 2);
+  var x = function(p){ return M.l + (pIdx(p) - t0) / (t1 - t0) * iw; };
+  var xi = function(i){ return M.l + i / (t1 - t0) * iw; };
+  var y = function(v){ return M.t + (yMax - v) / (yMax - yMin) * ih; };
+
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.aspectRatio = W + '/' + H;
+
+  function el(name, attrs, parent){
+    var e = document.createElementNS(NS, name);
+    for(var k in attrs) e.setAttribute(k, attrs[k]);
+    (parent || svg).appendChild(e);
+    return e;
+  }
+
+  /* faixas do CODACE */
+  D.recessoes_codace.forEach(function(r){
+    var x0 = x(r.inicio), x1 = x(r.fim) + iw / (t1 - t0);
+    el('rect', {x:x0, y:M.t, width:Math.max(1, x1-x0), height:ih, fill:'var(--band)'});
+  });
+
+  /* grade e eixo y */
+  for(var gv = Math.ceil(yMin); gv <= yMax; gv++){
+    el('line', {x1:M.l, x2:M.l+iw, y1:y(gv), y2:y(gv),
+      stroke:'var(--line)', 'stroke-width':1, opacity: gv === 0 ? 1 : .55});
+    el('text', {x:M.l-8, y:y(gv)+4, 'text-anchor':'end', class:'ax-text'}).textContent =
+      gv.toLocaleString('pt-BR');
+  }
+
+  /* eixo x */
+  for(var yr = 1980; yr <= +last.split('-')[0]; yr += 5){
+    var px = x(yr + '-01');
+    if(px > M.l + iw + 2) break;
+    el('line', {x1:px, x2:px, y1:M.t+ih, y2:M.t+ih+5, stroke:'var(--line)', 'stroke-width':1});
+    el('text', {x:px, y:M.t+ih+19, 'text-anchor':'middle', class:'ax-text'}).textContent = yr;
+  }
+
+  /* caminhos */
+  var pts = [];
+  for(var i = 0; i < n; i++) if(S.ind[i] != null) pts.push([xi(pIdx(S.datas[i]) - t0), S.ind[i]]);
+
+  var areaD = 'M' + pts[0][0] + ',' + y(0);
+  pts.forEach(function(p){ areaD += 'L' + p[0].toFixed(2) + ',' + y(p[1]).toFixed(2); });
+  areaD += 'L' + pts[pts.length-1][0].toFixed(2) + ',' + y(0) + 'Z';
+
+  var clipId = 'clip-above';
+  var defs = el('defs', {});
+  var cp = el('clipPath', {id:clipId}, defs);
+  el('rect', {x:M.l, y:M.t, width:iw, height:Math.max(0, y(THR)-M.t)}, cp);
+
+  el('path', {d:areaD, fill:'var(--accent-soft)'});
+  el('path', {d:areaD, fill:'var(--alert-soft)', 'clip-path':'url(#'+clipId+')'});
+
+  var lineD = 'M' + pts.map(function(p){ return p[0].toFixed(2) + ',' + y(p[1]).toFixed(2); }).join('L');
+  el('path', {d:lineD, fill:'none', stroke:'var(--accent)', 'stroke-width':1.7,
+    'stroke-linejoin':'round', 'stroke-linecap':'round'});
+
+  /* linha do gatilho */
+  el('line', {x1:M.l, x2:M.l+iw, y1:y(THR), y2:y(THR), stroke:'var(--alert)',
+    'stroke-width':1.6, 'stroke-dasharray':'5 4'});
+  el('text', {x:M.l+iw, y:y(THR)-7, 'text-anchor':'end', class:'thr-label'}).textContent = '0,3 p.p.';
+
+  /* ponto final */
+  var lastPt = pts[pts.length-1];
+  el('circle', {cx:lastPt[0], cy:y(lastPt[1]), r:4,
+    fill: on ? 'var(--alert)' : 'var(--accent)', stroke:'var(--surface)', 'stroke-width':2});
+
+  /* hover */
+  var cross = el('line', {x1:0, x2:0, y1:M.t, y2:M.t+ih, stroke:'var(--ink)',
+    'stroke-width':1, opacity:0, 'pointer-events':'none'});
+  var focus = el('circle', {r:4.5, fill:'var(--accent)', stroke:'var(--surface)',
+    'stroke-width':2, opacity:0, 'pointer-events':'none'});
+  var hit = el('rect', {x:M.l, y:M.t, width:iw, height:ih, fill:'transparent'});
+  var tip = document.getElementById('tip');
+  var holder = document.getElementById('holder');
+
+  function move(ev){
+    var rect = svg.getBoundingClientRect();
+    var cx = (ev.clientX - rect.left) / rect.width * W;
+    var k = Math.round((cx - M.l) / iw * (t1 - t0));
+    k = Math.max(0, Math.min(n - 1, k));
+    var v = S.ind[k];
+    if(v == null){ leave(); return; }
+    var px = xi(k), py = y(v);
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', .22);
+    focus.setAttribute('cx', px); focus.setAttribute('cy', py); focus.setAttribute('opacity', 1);
+    focus.setAttribute('fill', v >= THR ? 'var(--alert)' : 'var(--accent)');
+    tip.innerHTML = '<b>' + curto(S.datas[k]) + '</b>' +
+      '<div class="row"><span>Indicador</span><span>' + num(v,2) + ' p.p.</span></div>' +
+      '<div class="row"><span>Desocupação</span><span>' + num(S.sa[k],1) + '%</span></div>' +
+      '<div class="state ' + (v >= THR ? 'on' : 'off') + '">' +
+      (v >= THR ? 'acionado' : 'abaixo do gatilho') + '</div>';
+    tip.style.opacity = 1;
+    var hw = holder.clientWidth, sx = px / W * hw, sy = py / H * holder.clientHeight;
+    var tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(hw - tw, sx - tw/2)) + 'px';
+    tip.style.top = Math.max(0, sy - tip.offsetHeight - 14) + 'px';
+  }
+  function leave(){
+    cross.setAttribute('opacity', 0);
+    focus.setAttribute('opacity', 0);
+    tip.style.opacity = 0;
+  }
+  hit.addEventListener('mousemove', move);
+  hit.addEventListener('mouseleave', leave);
+  hit.addEventListener('touchmove', function(e){ if(e.touches[0]) move(e.touches[0]); }, {passive:true});
+})();
+</script>
+</body>
+</html>
