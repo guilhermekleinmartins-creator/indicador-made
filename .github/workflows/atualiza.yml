@@ -1,0 +1,58 @@
+name: Atualiza o Indicador Made
+
+on:
+  schedule:
+    - cron: "0 12 2,9 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualiza
+  cancel-in-progress: false
+
+jobs:
+  atualiza:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instala dependencias
+        run: pip install -r requirements.txt
+
+      - name: Busca o dado novo no SIDRA
+        run: python fetch_sidra.py
+
+      - name: Recalcula o indicador
+        run: python pipeline.py --check
+
+      - name: Confere a saida
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("docs/data.json"))
+          ind = d["status"]["indicador"]
+          n = d["meta"]["n_obs"]
+          print(f"ultimo={d['meta']['ultimo_mes']} indicador={ind} acionado={d['status']['acionado']} n={n}")
+          assert -3 < ind < 10, f"indicador fora de faixa plausivel: {ind}"
+          assert n > 550, f"serie curta demais: {n} observacoes"
+          PY
+
+      - name: Publica se algo mudou
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- data docs; then
+            echo "nada mudou; nada a publicar"
+            exit 0
+          fi
+          MES=$(python -c "import json;print(json.load(open('docs/data.json'))['meta']['ultimo_mes'])")
+          git add data docs
+          git commit -m "Atualiza o indicador com os dados ate ${MES}"
+          git push
