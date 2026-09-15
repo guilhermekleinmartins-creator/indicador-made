@@ -166,12 +166,6 @@
   .tip .r span:first-child{color:var(--mute)}
   .tip .s{margin-top:4px;font-weight:700}
 
-  /* notas */
-  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:24px 48px;padding:24px 0 0}
-  .notes h3{font-size:13px;font-weight:700;margin:0 0 7px;padding-top:7px;border-top:2px solid var(--ink)}
-  .notes p{margin:0 0 9px;font-size:14.5px;line-height:1.45}
-  .notes p:last-child{margin-bottom:0}
-
   @media (max-width:900px){
     .page{grid-template-columns:1fr;gap:30px}
     .rail{position:static;order:2;border-top:4px solid var(--ink);padding-top:20px}
@@ -287,40 +281,10 @@
       </div>
     </section>
 
-    <hr class="rule-thin">
-
-    <section class="notes">
-      <div>
-        <h3>Como a série é construída</h3>
-        <p>
-          A taxa mensal de desocupação combina três fontes: a PME na metodologia antiga (1980–2002),
-          a PME na metodologia nova (2002–2012) e a PNAD Contínua (trimestre móvel, 2012 em diante).
-          As séries são encadeadas retrospectivamente a partir do nível da PNADc e dessazonalizadas
-          com o X-13ARIMA-SEATS.
-        </p>
-        <p>
-          O ajuste sazonal é reestimado sobre a série inteira a cada divulgação do IBGE, de modo que
-          meses antigos podem sofrer revisões marginais e a contagem de episódios pode diferir
-          ligeiramente da Tabela 1 da nota original.
-        </p>
-      </div>
-      <div>
-        <h3>Por que 0,3 e não 0,5</h3>
-        <p>
-          O limiar de 0,5 p.p. de Claudia Sahm, calibrado para os Estados Unidos, sinaliza com atraso
-          vários episódios brasileiros. A elevada informalidade e a saída de trabalhadores da força de
-          trabalho amortecem a resposta do desemprego aberto à queda da atividade — um coeficiente de
-          Okun menor em valor absoluto.
-        </p>
-        <p>
-          O melhor compromisso entre rapidez de detecção e falsos positivos foi obtido em 0,3 p.p.
-        </p>
-      </div>
-    </section>
   </main>
 </div>
 
-<script src="data.js"></script>
+<script src="data.js?v=2"></script>
 <script>
 (function(){
   var D = window.MADE_DATA;
@@ -331,10 +295,16 @@
 
   function num(v,d){ return v == null ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
   function pIdx(p){ var a = p.split('-'); return (+a[0])*12 + (+a[1]) - 1; }
-  function curto(p){ var a = p.split('-'); return MES[+a[1]-1] + '/' + a[0]; }
+  /* tolerante a campo ausente: uma versão antiga de data.js em cache não deve
+     derrubar o resto da página */
+  function curto(p){
+    if(!p || typeof p !== 'string' || p.indexOf('-') < 0) return '—';
+    var a = p.split('-'); return MES[+a[1]-1] + '/' + a[0];
+  }
 
   var on = st.acionado;
 
+  try{
   /* ---------- estado ---------- */
   document.getElementById('chip').className = 'chip' + (on ? ' on' : '');
   document.getElementById('chip-text').textContent = on ? 'recessão sinalizada' : 'sem sinal de recessão';
@@ -371,7 +341,8 @@
   document.getElementById('r-since').innerHTML = on
     ? '0<i>acionado desde ' + curto(st.inicio_recessao_corrente) + '</i>'
     : st.meses_desde_ultima_recessao + '<i>desde ' + curto(st.fim_ultima_recessao) + '</i>';
-  document.getElementById('r-record').innerHTML = st.recorde_meses_sem_recessao +
+  document.getElementById('r-record').innerHTML =
+    (st.recorde_meses_sem_recessao == null ? '—' : st.recorde_meses_sem_recessao) +
     '<i>' + curto(st.recorde_de) + ' – ' + curto(st.recorde_ate) +
     (st.recorde_em_curso ? ', em curso' : '') + '</i>';
   document.getElementById('chart-range').textContent =
@@ -386,6 +357,10 @@
     el.href = 'https://github.com/' + m[1] + (seg ? '/' + seg : '.github.io');
     el.hidden = false;
   })();
+  } catch(err){
+    /* o painel de status nunca deve impedir o gráfico de ser desenhado */
+    console.error('Indicador Made: falha ao montar o painel de status', err);
+  }
 
   /* ---------- gráfico ----------
      O viewBox é desenhado nas dimensões reais em pixels do contêiner, de modo que
